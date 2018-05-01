@@ -1981,3 +1981,27 @@ fn null_invalid_type() {
         String::from("invalid type: null, expected a string at line 1 column 4")
     );
 }
+
+#[test]
+fn no_drop_overflow_object() {
+    let mut v = serde_json::Value::Object(serde_json::Map::new());
+    for _ in 0..1000000 {
+        let mut new_v = serde_json::Value::Object(serde_json::Map::new());
+        ::std::mem::swap(&mut v, &mut new_v);
+        v.as_object_mut().unwrap().insert("".to_string(), new_v);
+    }
+
+    drop(v);
+}
+
+#[test]
+fn no_drop_overflow_array() {
+    let mut v = serde_json::Value::Array(Vec::new());
+    for _ in 0..1000000 {
+        let mut new_v = serde_json::Value::Array(Vec::new());
+        ::std::mem::swap(&mut v, &mut new_v);
+        v.as_array_mut().unwrap().push(new_v);
+    }
+
+    drop(v);
+}

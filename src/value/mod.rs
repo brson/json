@@ -1066,3 +1066,52 @@ where
 {
     T::deserialize(value)
 }
+
+impl Drop for Value {
+    fn drop(&mut self) {
+        // We're going to iteratively peel apart the entire tree, by removing
+        // child nodes from their parents and dropping them. The root is a
+        // special case since it's not passed by value, so we first have to
+        // remove its children and push them onto the stack, then we'll start
+        // iterating on the stack and taking apart their children.
+
+        let mut stack = vec![];
+
+        match *self {
+            Value::Object(ref root_map) => {
+                // This first step is pretty distasteful but I don't see offhad a better
+                // way to do it: while there are still values in the root dictionary,
+                // copy the entire key string, then remove the value by key.
+                let root_map = self.as_object_mut().expect("document root should be a map");
+                let mut key = String::new();
+                while !root_map.is_empty() {
+                    key.clear();
+                    key.push_str(root_map.keys().next().unwrap());
+                    stack.push(root_map.remove(&key).unwrap());
+                }
+            },
+            Value::Array(ref root_array) => {
+                while let Some(v) = root_array.pop() {
+                    stack.push(v);
+                }
+            }
+            _ => (),
+        }
+
+        while let Some(val) = stack.pop() {
+            match val {
+                Value::Object(val) => {
+                    for (_, child) in val.into_iter() {
+                        stack.push(child);
+                    }
+                }
+                Value::Array(val) => {
+                    for child in val.into_iter() {
+                        stack.push(child);
+                    }
+                }
+                _ => (),
+            }
+        }
+    }
+}
